@@ -1,5 +1,5 @@
 /*
- * Copyright 2012-2019 the original author or authors.
+ * Copyright 2012-2021 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -30,6 +30,7 @@ import org.springframework.boot.builder.SpringApplicationBuilder;
 import org.springframework.boot.context.event.ApplicationStartingEvent;
 import org.springframework.boot.logging.LogFile;
 import org.springframework.boot.logging.LoggingSystem;
+import org.springframework.boot.logging.LoggingSystemProperties;
 import org.springframework.boot.testsupport.system.CapturedOutput;
 import org.springframework.boot.testsupport.system.OutputCaptureExtension;
 import org.springframework.context.ApplicationListener;
@@ -56,13 +57,16 @@ class LoggingApplicationListenerIntegrationTests {
 	}
 
 	@Test
-	void logFileRegisteredInTheContextWhenApplicable(@TempDir File tempDir) throws Exception {
+	void logFileRegisteredInTheContextWhenApplicable(@TempDir File tempDir) {
 		String logFile = new File(tempDir, "test.log").getAbsolutePath();
 		try (ConfigurableApplicationContext context = new SpringApplicationBuilder(SampleService.class)
-				.web(WebApplicationType.NONE).properties("logging.file=" + logFile).run()) {
+				.web(WebApplicationType.NONE).properties("logging.file.name=" + logFile).run()) {
 			SampleService service = context.getBean(SampleService.class);
 			assertThat(service.logFile).isNotNull();
 			assertThat(service.logFile.toString()).isEqualTo(logFile);
+		}
+		finally {
+			System.clearProperty(LoggingSystemProperties.LOG_FILE);
 		}
 	}
 

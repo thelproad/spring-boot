@@ -1,5 +1,5 @@
 /*
- * Copyright 2012-2019 the original author or authors.
+ * Copyright 2012-2021 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -26,6 +26,7 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import org.junit.jupiter.api.Test;
 
@@ -37,6 +38,7 @@ import org.springframework.boot.context.properties.source.ConfigurationPropertyS
 import org.springframework.boot.context.properties.source.MockConfigurationPropertySource;
 import org.springframework.boot.convert.Delimiter;
 import org.springframework.core.ResolvableType;
+import org.springframework.core.convert.ConversionService;
 import org.springframework.format.annotation.DateTimeFormat;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -317,6 +319,18 @@ class JavaBeanBinderTests {
 	}
 
 	@Test
+	void bindToClassWithOverriddenPropertyShouldSetSubclassProperty() {
+		MockConfigurationPropertySource source = new MockConfigurationPropertySource();
+		source.put("foo.value-bean.int-value", "123");
+		source.put("foo.value-bean.sub-int-value", "456");
+		this.sources.add(source);
+		ExampleNestedSubclassBean bean = this.binder.bind("foo", Bindable.of(ExampleNestedSubclassBean.class)).get();
+		assertThat(bean.getValueBean()).isNotNull();
+		assertThat(bean.getValueBean().getIntValue()).isEqualTo(123);
+		assertThat(bean.getValueBean().getSubIntValue()).isEqualTo(456);
+	}
+
+	@Test
 	void bindToClassWhenPropertiesMissingShouldReturnUnbound() {
 		MockConfigurationPropertySource source = new MockConfigurationPropertySource();
 		source.put("faf.int-value", "12");
@@ -339,7 +353,8 @@ class JavaBeanBinderTests {
 
 	@Test
 	void bindToInstanceWhenNoDefaultConstructorShouldBind() {
-		Binder binder = new Binder(this.sources, null, null, null, null, (type) -> null);
+		Binder binder = new Binder(this.sources, null, (ConversionService) null, null, null,
+				(bindable, isNestedConstructorBinding) -> null);
 		MockConfigurationPropertySource source = new MockConfigurationPropertySource();
 		source.put("foo.value", "bar");
 		this.sources.add(source);
@@ -537,6 +552,37 @@ class JavaBeanBinderTests {
 		this.sources.add(source);
 		PackagePrivateSetterBean bean = this.binder.bind("foo", Bindable.of(PackagePrivateSetterBean.class)).get();
 		assertThat(bean.getProperty()).isEqualTo("test");
+	}
+
+	@Test
+	void bindUsesConsistentPropertyOrder() {
+		MockConfigurationPropertySource source = new MockConfigurationPropertySource();
+		source.put("foo.gamma", "0");
+		source.put("foo.alpha", "0");
+		source.put("foo.beta", "0");
+		this.sources.add(source);
+		PropertyOrderBean bean = this.binder.bind("foo", Bindable.of(PropertyOrderBean.class)).get();
+		assertThat(bean.getAlpha()).isEqualTo(0);
+		assertThat(bean.getBeta()).isEqualTo(1);
+		assertThat(bean.getGamma()).isEqualTo(2);
+	}
+
+	@Test // gh-23007
+	void bindWhenBeanWithGetSetIsMethodsFoundUsesGetterThatMatchesSetter() {
+		MockConfigurationPropertySource source = new MockConfigurationPropertySource();
+		source.put("test.names", "spring,boot");
+		this.sources.add(source);
+		JavaBeanWithGetSetIs bean = this.binder.bind("test", Bindable.of(JavaBeanWithGetSetIs.class)).get();
+		assertThat(bean.getNames()).containsExactly("spring", "boot");
+	}
+
+	@Test // gh-23007
+	void bindWhenBeanWithGetIsMethodsFoundDoesNotUseIsGetter() {
+		MockConfigurationPropertySource source = new MockConfigurationPropertySource();
+		source.put("test.names", "spring,boot");
+		this.sources.add(source);
+		JavaBeanWithGetIs bean = this.binder.bind("test", Bindable.of(JavaBeanWithGetIs.class)).get();
+		assertThat(bean.getNames()).containsExactly("spring", "boot");
 	}
 
 	static class ExampleValueBean {
@@ -764,6 +810,35 @@ class JavaBeanBinderTests {
 
 			String getFoo() {
 				return "foo";
+			}
+
+		}
+
+	}
+
+	static class ExampleNestedSubclassBean extends ExampleNestedBean {
+
+		private ExampleValueSubclassBean valueBean;
+
+		@Override
+		ExampleValueSubclassBean getValueBean() {
+			return this.valueBean;
+		}
+
+		void setValueBean(ExampleValueSubclassBean valueBean) {
+			this.valueBean = valueBean;
+		}
+
+		static class ExampleValueSubclassBean extends ExampleValueBean {
+
+			private int subIntValue;
+
+			int getSubIntValue() {
+				return this.subIntValue;
+			}
+
+			void setSubIntValue(int intValue) {
+				this.subIntValue = intValue;
 			}
 
 		}
@@ -1031,6 +1106,74 @@ class JavaBeanBinderTests {
 
 		void setProperty(String property) {
 			this.property = property;
+		}
+
+	}
+
+	static class JavaBeanWithGetSetIs {
+
+		private List<String> names = new ArrayList<>();
+
+		List<String> getNames() {
+			return this.names;
+		}
+
+		void setNames(List<String> names) {
+			this.names = names;
+		}
+
+		boolean isNames() {
+			return !this.names.isEmpty();
+		}
+
+	}
+
+	static class JavaBeanWithGetIs {
+
+		private List<String> names = new ArrayList<>();
+
+		boolean isNames() {
+			return !this.names.isEmpty();
+		}
+
+		List<String> getNames() {
+			return this.names;
+		}
+
+	}
+
+	static class PropertyOrderBean {
+
+		static AtomicInteger atomic = new AtomicInteger();
+
+		private int alpha;
+
+		private int beta;
+
+		private int gamma;
+
+		int getAlpha() {
+			return this.alpha;
+		}
+
+		void setAlpha(int alpha) {
+			this.alpha = alpha + atomic.getAndIncrement();
+		}
+
+		int getBeta() {
+			return this.beta;
+		}
+
+		void setBeta(int beta) {
+			this.beta = beta + atomic.getAndIncrement();
+		}
+
+		int getGamma() {
+			return this.gamma;
+		}
+
+		void setGamma(int gamma) {
+			this.gamma = gamma + atomic.getAndIncrement();
 		}
 
 	}

@@ -1,5 +1,5 @@
 /*
- * Copyright 2012-2019 the original author or authors.
+ * Copyright 2012-2021 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,10 +22,10 @@ import java.util.List;
 import java.util.Map;
 import java.util.function.Supplier;
 
-import javax.servlet.FilterRegistration;
-import javax.servlet.ServletContext;
-import javax.servlet.ServletException;
-import javax.servlet.ServletRegistration;
+import jakarta.servlet.FilterRegistration;
+import jakarta.servlet.ServletContext;
+import jakarta.servlet.ServletException;
+import jakarta.servlet.ServletRegistration;
 
 import org.junit.jupiter.api.Test;
 
@@ -56,6 +56,9 @@ import org.springframework.web.reactive.function.server.RouterFunction;
 import org.springframework.web.reactive.function.server.ServerResponse;
 import org.springframework.web.servlet.DispatcherServlet;
 import org.springframework.web.servlet.config.annotation.EnableWebMvc;
+import org.springframework.web.servlet.config.annotation.PathMatchConfigurer;
+import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
+import org.springframework.web.util.pattern.PathPatternParser;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.BDDMockito.given;
@@ -77,6 +80,28 @@ class MappingsEndpointTests {
 		Supplier<ConfigurableWebApplicationContext> contextSupplier = prepareContextSupplier();
 		new WebApplicationContextRunner(contextSupplier)
 				.withUserConfiguration(EndpointConfiguration.class, ServletWebConfiguration.class).run((context) -> {
+					ContextMappings contextMappings = contextMappings(context);
+					assertThat(contextMappings.getParentId()).isNull();
+					assertThat(contextMappings.getMappings()).containsOnlyKeys("dispatcherServlets", "servletFilters",
+							"servlets");
+					Map<String, List<DispatcherServletMappingDescription>> dispatcherServlets = mappings(
+							contextMappings, "dispatcherServlets");
+					assertThat(dispatcherServlets).containsOnlyKeys("dispatcherServlet");
+					List<DispatcherServletMappingDescription> handlerMappings = dispatcherServlets
+							.get("dispatcherServlet");
+					assertThat(handlerMappings).hasSize(1);
+					List<ServletRegistrationMappingDescription> servlets = mappings(contextMappings, "servlets");
+					assertThat(servlets).hasSize(1);
+					List<FilterRegistrationMappingDescription> filters = mappings(contextMappings, "servletFilters");
+					assertThat(filters).hasSize(1);
+				});
+	}
+
+	@Test
+	void servletWebMappingsWithPathPatternParser() {
+		Supplier<ConfigurableWebApplicationContext> contextSupplier = prepareContextSupplier();
+		new WebApplicationContextRunner(contextSupplier).withUserConfiguration(EndpointConfiguration.class,
+				ServletWebConfiguration.class, PathPatternParserConfiguration.class).run((context) -> {
 					ContextMappings contextMappings = contextMappings(context);
 					assertThat(contextMappings.getParentId()).isNull();
 					assertThat(contextMappings.getMappings()).containsOnlyKeys("dispatcherServlets", "servletFilters",
@@ -256,6 +281,23 @@ class MappingsEndpointTests {
 			catch (ServletException ex) {
 				throw new IllegalStateException(ex);
 			}
+		}
+
+	}
+
+	@Configuration
+	static class PathPatternParserConfiguration {
+
+		@Bean
+		WebMvcConfigurer pathPatternParserConfigurer() {
+			return new WebMvcConfigurer() {
+
+				@Override
+				public void configurePathMatch(PathMatchConfigurer configurer) {
+					configurer.setPatternParser(new PathPatternParser());
+				}
+
+			};
 		}
 
 	}

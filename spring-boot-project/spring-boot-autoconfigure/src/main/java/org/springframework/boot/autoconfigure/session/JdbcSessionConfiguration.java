@@ -1,5 +1,5 @@
 /*
- * Copyright 2012-2019 the original author or authors.
+ * Copyright 2012-2021 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,18 +20,23 @@ import java.time.Duration;
 
 import javax.sql.DataSource;
 
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
+import org.springframework.boot.autoconfigure.sql.init.OnDatabaseInitializationCondition;
+import org.springframework.boot.autoconfigure.web.ServerProperties;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
+import org.springframework.boot.sql.init.dependency.DatabaseInitializationDependencyConfigurer;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Conditional;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.core.io.ResourceLoader;
+import org.springframework.context.annotation.Import;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.session.SessionRepository;
 import org.springframework.session.jdbc.JdbcIndexedSessionRepository;
+import org.springframework.session.jdbc.config.annotation.SpringSessionDataSource;
 import org.springframework.session.jdbc.config.annotation.web.http.JdbcHttpSessionConfiguration;
 
 /**
@@ -47,21 +52,29 @@ import org.springframework.session.jdbc.config.annotation.web.http.JdbcHttpSessi
 @ConditionalOnBean(DataSource.class)
 @Conditional(ServletSessionCondition.class)
 @EnableConfigurationProperties(JdbcSessionProperties.class)
+@Import(DatabaseInitializationDependencyConfigurer.class)
 class JdbcSessionConfiguration {
 
 	@Bean
-	@ConditionalOnMissingBean
-	JdbcSessionDataSourceInitializer jdbcSessionDataSourceInitializer(DataSource dataSource,
-			ResourceLoader resourceLoader, JdbcSessionProperties properties) {
-		return new JdbcSessionDataSourceInitializer(dataSource, resourceLoader, properties);
+	@SuppressWarnings("deprecation")
+	@ConditionalOnMissingBean({ JdbcSessionDataSourceScriptDatabaseInitializer.class,
+			JdbcSessionDataSourceInitializer.class })
+	@Conditional(OnJdbcSessionDatasourceInitializationCondition.class)
+	JdbcSessionDataSourceScriptDatabaseInitializer jdbcSessionDataSourceScriptDatabaseInitializer(
+			@SpringSessionDataSource ObjectProvider<DataSource> sessionDataSource,
+			ObjectProvider<DataSource> dataSource, JdbcSessionProperties properties) {
+		DataSource dataSourceToInitialize = sessionDataSource.getIfAvailable(dataSource::getObject);
+		return new JdbcSessionDataSourceScriptDatabaseInitializer(dataSourceToInitialize, properties);
 	}
 
-	@Configuration
+	@Configuration(proxyBeanMethods = false)
 	static class SpringBootJdbcHttpSessionConfiguration extends JdbcHttpSessionConfiguration {
 
 		@Autowired
-		void customize(SessionProperties sessionProperties, JdbcSessionProperties jdbcSessionProperties) {
-			Duration timeout = sessionProperties.getTimeout();
+		void customize(SessionProperties sessionProperties, JdbcSessionProperties jdbcSessionProperties,
+				ServerProperties serverProperties) {
+			Duration timeout = sessionProperties
+					.determineTimeout(() -> serverProperties.getServlet().getSession().getTimeout());
 			if (timeout != null) {
 				setMaxInactiveIntervalInSeconds((int) timeout.getSeconds());
 			}
@@ -69,6 +82,14 @@ class JdbcSessionConfiguration {
 			setCleanupCron(jdbcSessionProperties.getCleanupCron());
 			setFlushMode(jdbcSessionProperties.getFlushMode());
 			setSaveMode(jdbcSessionProperties.getSaveMode());
+		}
+
+	}
+
+	static class OnJdbcSessionDatasourceInitializationCondition extends OnDatabaseInitializationCondition {
+
+		OnJdbcSessionDatasourceInitializationCondition() {
+			super("Jdbc Session", "spring.session.jdbc.initialize-schema");
 		}
 
 	}

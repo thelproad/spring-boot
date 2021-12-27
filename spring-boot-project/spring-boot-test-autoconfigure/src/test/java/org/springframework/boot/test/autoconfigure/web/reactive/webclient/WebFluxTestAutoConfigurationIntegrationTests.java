@@ -1,5 +1,5 @@
 /*
- * Copyright 2012-2019 the original author or authors.
+ * Copyright 2012-2021 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,7 +22,8 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.context.MessageSourceAutoConfiguration;
 import org.springframework.boot.autoconfigure.freemarker.FreeMarkerAutoConfiguration;
 import org.springframework.boot.autoconfigure.mustache.MustacheAutoConfiguration;
-import org.springframework.boot.autoconfigure.thymeleaf.ThymeleafAutoConfiguration;
+import org.springframework.boot.autoconfigure.security.oauth2.client.reactive.ReactiveOAuth2ClientAutoConfiguration;
+import org.springframework.boot.autoconfigure.security.oauth2.resource.reactive.ReactiveOAuth2ResourceServerAutoConfiguration;
 import org.springframework.boot.autoconfigure.validation.ValidationAutoConfiguration;
 import org.springframework.boot.autoconfigure.web.reactive.error.ErrorWebFluxAutoConfiguration;
 import org.springframework.boot.test.autoconfigure.web.reactive.WebFluxTest;
@@ -37,6 +38,7 @@ import static org.springframework.boot.test.autoconfigure.AutoConfigurationImpor
  * @author Stephane Nicoll
  * @author Artsiom Yudovin
  * @author Ali Dehghani
+ * @author Madhura Bhave
  */
 @WebFluxTest
 class WebFluxTestAutoConfigurationIntegrationTests {
@@ -65,13 +67,19 @@ class WebFluxTestAutoConfigurationIntegrationTests {
 	}
 
 	@Test
-	void thymeleafAutoConfigurationIsImported() {
-		assertThat(this.applicationContext).has(importedAutoConfiguration(ThymeleafAutoConfiguration.class));
+	void errorWebFluxAutoConfigurationIsImported() {
+		assertThat(this.applicationContext).has(importedAutoConfiguration(ErrorWebFluxAutoConfiguration.class));
 	}
 
 	@Test
-	void errorWebFluxAutoConfigurationIsImported() {
-		assertThat(this.applicationContext).has(importedAutoConfiguration(ErrorWebFluxAutoConfiguration.class));
+	void oAuth2ClientAutoConfigurationWasImported() {
+		assertThat(this.applicationContext).has(importedAutoConfiguration(ReactiveOAuth2ClientAutoConfiguration.class));
+	}
+
+	@Test
+	void oAuth2ResourceServerAutoConfigurationWasImported() {
+		assertThat(this.applicationContext)
+				.has(importedAutoConfiguration(ReactiveOAuth2ResourceServerAutoConfiguration.class));
 	}
 
 }

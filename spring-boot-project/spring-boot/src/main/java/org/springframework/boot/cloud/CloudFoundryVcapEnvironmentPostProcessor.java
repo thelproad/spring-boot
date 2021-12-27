@@ -1,5 +1,5 @@
 /*
- * Copyright 2012-2019 the original author or authors.
+ * Copyright 2012-2021 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,10 +23,9 @@ import java.util.Map;
 import java.util.Properties;
 
 import org.apache.commons.logging.Log;
-import org.apache.commons.logging.LogFactory;
 
 import org.springframework.boot.SpringApplication;
-import org.springframework.boot.context.config.ConfigFileApplicationListener;
+import org.springframework.boot.context.config.ConfigDataEnvironmentPostProcessor;
 import org.springframework.boot.env.EnvironmentPostProcessor;
 import org.springframework.boot.json.JsonParser;
 import org.springframework.boot.json.JsonParserFactory;
@@ -91,14 +90,22 @@ import org.springframework.util.StringUtils;
  */
 public class CloudFoundryVcapEnvironmentPostProcessor implements EnvironmentPostProcessor, Ordered {
 
-	private static final Log logger = LogFactory.getLog(CloudFoundryVcapEnvironmentPostProcessor.class);
-
 	private static final String VCAP_APPLICATION = "VCAP_APPLICATION";
 
 	private static final String VCAP_SERVICES = "VCAP_SERVICES";
 
+	private final Log logger;
+
 	// Before ConfigFileApplicationListener so values there can use these ones
-	private int order = ConfigFileApplicationListener.DEFAULT_ORDER - 1;
+	private int order = ConfigDataEnvironmentPostProcessor.ORDER - 1;
+
+	/**
+	 * Create a new {@link CloudFoundryVcapEnvironmentPostProcessor} instance.
+	 * @param logger the logger to use
+	 */
+	public CloudFoundryVcapEnvironmentPostProcessor(Log logger) {
+		this.logger = logger;
+	}
 
 	public void setOrder(int order) {
 		this.order = order;
@@ -142,7 +149,7 @@ public class CloudFoundryVcapEnvironmentPostProcessor implements EnvironmentPost
 			extractPropertiesFromApplication(properties, map);
 		}
 		catch (Exception ex) {
-			logger.error("Could not parse VCAP_APPLICATION", ex);
+			this.logger.error("Could not parse VCAP_APPLICATION", ex);
 		}
 		return properties;
 	}
@@ -155,7 +162,7 @@ public class CloudFoundryVcapEnvironmentPostProcessor implements EnvironmentPost
 			extractPropertiesFromServices(properties, map);
 		}
 		catch (Exception ex) {
-			logger.error("Could not parse VCAP_SERVICES", ex);
+			this.logger.error("Could not parse VCAP_SERVICES", ex);
 		}
 		return properties;
 	}

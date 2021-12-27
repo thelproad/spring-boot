@@ -1,5 +1,5 @@
 /*
- * Copyright 2012-2019 the original author or authors.
+ * Copyright 2012-2021 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -24,16 +24,14 @@ import java.util.Set;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.mockito.MockitoAnnotations;
 
-import org.springframework.beans.BeansException;
 import org.springframework.beans.factory.BeanFactory;
 import org.springframework.beans.factory.BeanFactoryAware;
 import org.springframework.beans.factory.config.ConfigurableListableBeanFactory;
 import org.springframework.beans.factory.support.DefaultListableBeanFactory;
 import org.springframework.boot.autoconfigure.freemarker.FreeMarkerAutoConfiguration;
+import org.springframework.boot.autoconfigure.groovy.template.GroovyTemplateAutoConfiguration;
 import org.springframework.boot.autoconfigure.mustache.MustacheAutoConfiguration;
-import org.springframework.boot.autoconfigure.thymeleaf.ThymeleafAutoConfiguration;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.io.DefaultResourceLoader;
 import org.springframework.core.io.support.SpringFactoriesLoader;
@@ -62,7 +60,6 @@ class AutoConfigurationImportSelectorTests {
 
 	@BeforeEach
 	void setup() {
-		MockitoAnnotations.initMocks(this);
 		this.importSelector.setBeanFactory(this.beanFactory);
 		this.importSelector.setEnvironment(this.environment);
 		this.importSelector.setResourceLoader(new DefaultResourceLoader());
@@ -147,12 +144,12 @@ class AutoConfigurationImportSelectorTests {
 
 	@Test
 	void combinedExclusionsAreApplied() {
-		this.environment.setProperty("spring.autoconfigure.exclude", ThymeleafAutoConfiguration.class.getName());
+		this.environment.setProperty("spring.autoconfigure.exclude", GroovyTemplateAutoConfiguration.class.getName());
 		String[] imports = selectImports(EnableAutoConfigurationWithClassAndClassNameExclusions.class);
 		assertThat(imports).hasSize(getAutoConfigurationClassNames().size() - 3);
 		assertThat(this.importSelector.getLastEvent().getExclusions()).contains(
 				FreeMarkerAutoConfiguration.class.getName(), MustacheAutoConfiguration.class.getName(),
-				ThymeleafAutoConfiguration.class.getName());
+				GroovyTemplateAutoConfiguration.class.getName());
 	}
 
 	@Test
@@ -200,6 +197,16 @@ class AutoConfigurationImportSelectorTests {
 		this.filters.add(filter);
 		selectImports(BasicEnableAutoConfiguration.class);
 		assertThat(filter.getBeanFactory()).isEqualTo(this.beanFactory);
+	}
+
+	@Test
+	void getExclusionFilterReuseFilters() {
+		String[] allImports = new String[] { "com.example.A", "com.example.B", "com.example.C" };
+		this.filters.add(new TestAutoConfigurationImportFilter(allImports, 0));
+		this.filters.add(new TestAutoConfigurationImportFilter(allImports, 2));
+		assertThat(this.importSelector.getExclusionFilter().test("com.example.A")).isTrue();
+		assertThat(this.importSelector.getExclusionFilter().test("com.example.B")).isFalse();
+		assertThat(this.importSelector.getExclusionFilter().test("com.example.C")).isTrue();
 	}
 
 	private String[] selectImports(Class<?> source) {
@@ -252,7 +259,7 @@ class AutoConfigurationImportSelectorTests {
 		}
 
 		@Override
-		public void setBeanFactory(BeanFactory beanFactory) throws BeansException {
+		public void setBeanFactory(BeanFactory beanFactory) {
 			this.beanFactory = beanFactory;
 		}
 

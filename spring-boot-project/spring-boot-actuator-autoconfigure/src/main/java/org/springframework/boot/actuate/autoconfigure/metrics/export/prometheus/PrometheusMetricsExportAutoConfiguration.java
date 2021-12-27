@@ -1,5 +1,5 @@
 /*
- * Copyright 2012-2019 the original author or authors.
+ * Copyright 2012-2021 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,15 +16,21 @@
 
 package org.springframework.boot.actuate.autoconfigure.metrics.export.prometheus;
 
+import java.io.IOException;
+import java.net.HttpURLConnection;
 import java.net.MalformedURLException;
 import java.net.URL;
+import java.nio.charset.StandardCharsets;
 import java.time.Duration;
+import java.util.Base64;
 import java.util.Map;
 
 import io.micrometer.core.instrument.Clock;
 import io.micrometer.prometheus.PrometheusConfig;
 import io.micrometer.prometheus.PrometheusMeterRegistry;
 import io.prometheus.client.CollectorRegistry;
+import io.prometheus.client.exporter.DefaultHttpConnectionFactory;
+import io.prometheus.client.exporter.HttpConnectionFactory;
 import io.prometheus.client.exporter.PushGateway;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
@@ -32,6 +38,7 @@ import org.apache.commons.logging.LogFactory;
 import org.springframework.boot.actuate.autoconfigure.endpoint.condition.ConditionalOnAvailableEndpoint;
 import org.springframework.boot.actuate.autoconfigure.metrics.CompositeMeterRegistryAutoConfiguration;
 import org.springframework.boot.actuate.autoconfigure.metrics.MetricsAutoConfiguration;
+import org.springframework.boot.actuate.autoconfigure.metrics.export.ConditionalOnEnabledMetricsExport;
 import org.springframework.boot.actuate.autoconfigure.metrics.export.simple.SimpleMetricsExportAutoConfiguration;
 import org.springframework.boot.actuate.metrics.export.prometheus.PrometheusPushGatewayManager;
 import org.springframework.boot.actuate.metrics.export.prometheus.PrometheusPushGatewayManager.ShutdownOperation;
@@ -48,21 +55,21 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.env.Environment;
 import org.springframework.core.log.LogMessage;
+import org.springframework.util.StringUtils;
 
 /**
  * {@link EnableAutoConfiguration Auto-configuration} for exporting metrics to Prometheus.
  *
- * @since 2.0.0
  * @author Jon Schneider
  * @author David J. M. Karlsen
+ * @since 2.0.0
  */
 @Configuration(proxyBeanMethods = false)
 @AutoConfigureBefore({ CompositeMeterRegistryAutoConfiguration.class, SimpleMetricsExportAutoConfiguration.class })
 @AutoConfigureAfter(MetricsAutoConfiguration.class)
 @ConditionalOnBean(Clock.class)
 @ConditionalOnClass(PrometheusMeterRegistry.class)
-@ConditionalOnProperty(prefix = "management.metrics.export.prometheus", name = "enabled", havingValue = "true",
-		matchIfMissing = true)
+@ConditionalOnEnabledMetricsExport("prometheus")
 @EnableConfigurationProperties(PrometheusProperties.class)
 public class PrometheusMetricsExportAutoConfiguration {
 
@@ -124,11 +131,16 @@ public class PrometheusMetricsExportAutoConfiguration {
 			String job = getJob(properties, environment);
 			Map<String, String> groupingKey = properties.getGroupingKey();
 			ShutdownOperation shutdownOperation = properties.getShutdownOperation();
-			return new PrometheusPushGatewayManager(getPushGateway(properties.getBaseUrl()), collectorRegistry,
-					pushRate, job, groupingKey, shutdownOperation);
+			PushGateway pushGateway = initializePushGateway(properties.getBaseUrl());
+			if (StringUtils.hasText(properties.getUsername())) {
+				pushGateway.setConnectionFactory(
+						new BasicAuthHttpConnectionFactory(properties.getUsername(), properties.getPassword()));
+			}
+			return new PrometheusPushGatewayManager(pushGateway, collectorRegistry, pushRate, job, groupingKey,
+					shutdownOperation);
 		}
 
-		private PushGateway getPushGateway(String url) {
+		private PushGateway initializePushGateway(String url) {
 			try {
 				return new PushGateway(new URL(url));
 			}
@@ -143,6 +155,31 @@ public class PrometheusMetricsExportAutoConfiguration {
 			String job = properties.getJob();
 			job = (job != null) ? job : environment.getProperty("spring.application.name");
 			return (job != null) ? job : FALLBACK_JOB;
+		}
+
+	}
+
+	static class BasicAuthHttpConnectionFactory implements HttpConnectionFactory {
+
+		private final HttpConnectionFactory delegate = new DefaultHttpConnectionFactory();
+
+		private final String authorizationHeader;
+
+		BasicAuthHttpConnectionFactory(String username, String password) {
+			this.authorizationHeader = "Basic " + new String(
+					Base64.getEncoder().encode(new String(username + ":" + password).getBytes(StandardCharsets.UTF_8)),
+					StandardCharsets.UTF_8);
+		}
+
+		String getAuthorizationHeader() {
+			return this.authorizationHeader;
+		}
+
+		@Override
+		public HttpURLConnection create(String url) throws IOException {
+			HttpURLConnection connection = this.delegate.create(url);
+			connection.setRequestProperty("Authorization", this.authorizationHeader);
+			return connection;
 		}
 
 	}

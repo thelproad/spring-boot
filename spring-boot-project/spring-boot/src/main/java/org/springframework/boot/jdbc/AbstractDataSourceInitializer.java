@@ -1,5 +1,5 @@
 /*
- * Copyright 2012-2019 the original author or authors.
+ * Copyright 2012-2021 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,9 +16,12 @@
 
 package org.springframework.boot.jdbc;
 
-import javax.annotation.PostConstruct;
+import java.sql.DatabaseMetaData;
+
 import javax.sql.DataSource;
 
+import org.springframework.beans.factory.InitializingBean;
+import org.springframework.boot.jdbc.init.DataSourceScriptDatabaseInitializer;
 import org.springframework.core.io.ResourceLoader;
 import org.springframework.jdbc.datasource.init.DatabasePopulatorUtils;
 import org.springframework.jdbc.datasource.init.ResourceDatabasePopulator;
@@ -32,8 +35,11 @@ import org.springframework.util.Assert;
  * @author Vedran Pavic
  * @author Stephane Nicoll
  * @since 1.5.0
+ * @deprecated since 2.6.0 for removal in 2.8.0 in favor of
+ * {@link DataSourceScriptDatabaseInitializer}
  */
-public abstract class AbstractDataSourceInitializer {
+@Deprecated
+public abstract class AbstractDataSourceInitializer implements InitializingBean {
 
 	private static final String PLATFORM_PLACEHOLDER = "@@platform@@";
 
@@ -48,7 +54,11 @@ public abstract class AbstractDataSourceInitializer {
 		this.resourceLoader = resourceLoader;
 	}
 
-	@PostConstruct
+	@Override
+	public void afterPropertiesSet() {
+		initialize();
+	}
+
 	protected void initialize() {
 		if (!isEnabled()) {
 			return;
@@ -87,7 +97,7 @@ public abstract class AbstractDataSourceInitializer {
 	protected String getDatabaseName() {
 		try {
 			String productName = JdbcUtils.commonDatabaseName(
-					JdbcUtils.extractDatabaseMetaData(this.dataSource, "getDatabaseProductName").toString());
+					JdbcUtils.extractDatabaseMetaData(this.dataSource, DatabaseMetaData::getDatabaseProductName));
 			DatabaseDriver databaseDriver = DatabaseDriver.fromProductName(productName);
 			if (databaseDriver == DatabaseDriver.UNKNOWN) {
 				throw new IllegalStateException("Unable to detect database type");

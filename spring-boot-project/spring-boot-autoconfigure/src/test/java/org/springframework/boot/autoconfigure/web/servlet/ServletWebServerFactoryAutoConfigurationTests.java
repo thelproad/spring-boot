@@ -1,5 +1,5 @@
 /*
- * Copyright 2012-2019 the original author or authors.
+ * Copyright 2012-2021 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,11 +16,11 @@
 
 package org.springframework.boot.autoconfigure.web.servlet;
 
-import javax.servlet.Filter;
-import javax.servlet.Servlet;
-import javax.servlet.ServletContext;
-import javax.servlet.http.HttpServletRequest;
-import javax.servlet.http.HttpServletResponse;
+import jakarta.servlet.Filter;
+import jakarta.servlet.Servlet;
+import jakarta.servlet.ServletContext;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
 
 import io.undertow.Undertow.Builder;
 import io.undertow.servlet.api.DeploymentInfo;
@@ -31,7 +31,6 @@ import org.eclipse.jetty.server.Server;
 import org.junit.jupiter.api.Test;
 import reactor.netty.http.server.HttpServer;
 
-import org.springframework.beans.BeansException;
 import org.springframework.beans.factory.config.BeanPostProcessor;
 import org.springframework.boot.autoconfigure.AutoConfigurations;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnExpression;
@@ -52,7 +51,9 @@ import org.springframework.boot.web.server.WebServerFactoryCustomizer;
 import org.springframework.boot.web.servlet.FilterRegistrationBean;
 import org.springframework.boot.web.servlet.ServletRegistrationBean;
 import org.springframework.boot.web.servlet.context.AnnotationConfigServletWebServerApplicationContext;
+import org.springframework.boot.web.servlet.server.AbstractServletWebServerFactory;
 import org.springframework.boot.web.servlet.server.ConfigurableServletWebServerFactory;
+import org.springframework.boot.web.servlet.server.CookieSameSiteSupplier;
 import org.springframework.boot.web.servlet.server.ServletWebServerFactory;
 import org.springframework.context.ApplicationContext;
 import org.springframework.context.annotation.Bean;
@@ -79,7 +80,7 @@ import static org.mockito.Mockito.verify;
  */
 class ServletWebServerFactoryAutoConfigurationTests {
 
-	private WebApplicationContextRunner contextRunner = new WebApplicationContextRunner(
+	private final WebApplicationContextRunner contextRunner = new WebApplicationContextRunner(
 			AnnotationConfigServletWebServerApplicationContext::new)
 					.withConfiguration(AutoConfigurations.of(ServletWebServerFactoryAutoConfiguration.class,
 							DispatcherServletAutoConfiguration.class))
@@ -244,6 +245,17 @@ class ServletWebServerFactoryAutoConfigurationTests {
 	}
 
 	@Test
+	void undertowServletWebServerFactoryCustomizerIsAutoConfigured() {
+		WebApplicationContextRunner runner = new WebApplicationContextRunner(
+				AnnotationConfigServletWebServerApplicationContext::new)
+						.withClassLoader(new FilteredClassLoader(Tomcat.class, HttpServer.class, Server.class))
+						.withConfiguration(AutoConfigurations.of(ServletWebServerFactoryAutoConfiguration.class))
+						.withUserConfiguration(UndertowBuilderCustomizerConfiguration.class)
+						.withPropertyValues("server.port:0");
+		runner.run((context) -> assertThat(context).hasSingleBean(UndertowServletWebServerFactoryCustomizer.class));
+	}
+
+	@Test
 	void tomcatConnectorCustomizerBeanIsAddedToFactory() {
 		WebApplicationContextRunner runner = new WebApplicationContextRunner(
 				AnnotationConfigServletWebServerApplicationContext::new)
@@ -359,6 +371,14 @@ class ServletWebServerFactoryAutoConfigurationTests {
 				.run((context) -> assertThat(context).hasSingleBean(FilterRegistrationBean.class));
 	}
 
+	@Test
+	void cookieSameSiteSuppliersAreApplied() {
+		this.contextRunner.withUserConfiguration(CookieSameSiteSupplierConfiguration.class).run((context) -> {
+			AbstractServletWebServerFactory webServerFactory = context.getBean(AbstractServletWebServerFactory.class);
+			assertThat(webServerFactory.getCookieSameSiteSuppliers()).hasSize(2);
+		});
+	}
+
 	private ContextConsumer<AssertableWebApplicationContext> verifyContext() {
 		return this::verifyContext;
 	}
@@ -444,7 +464,7 @@ class ServletWebServerFactoryAutoConfigurationTests {
 	static class EnsureWebServerHasNoServletContext implements BeanPostProcessor {
 
 		@Override
-		public Object postProcessBeforeInitialization(Object bean, String beanName) throws BeansException {
+		public Object postProcessBeforeInitialization(Object bean, String beanName) {
 			if (bean instanceof ConfigurableServletWebServerFactory) {
 				MockServletWebServerFactory webServerFactory = (MockServletWebServerFactory) bean;
 				assertThat(webServerFactory.getServletContext()).isNull();
@@ -642,6 +662,21 @@ class ServletWebServerFactoryAutoConfigurationTests {
 		FilterRegistrationBean<ForwardedHeaderFilter> testForwardedHeaderFilter() {
 			ForwardedHeaderFilter filter = new ForwardedHeaderFilter();
 			return new FilterRegistrationBean<>(filter);
+		}
+
+	}
+
+	@Configuration(proxyBeanMethods = false)
+	static class CookieSameSiteSupplierConfiguration {
+
+		@Bean
+		CookieSameSiteSupplier cookieSameSiteSupplier1() {
+			return CookieSameSiteSupplier.ofLax().whenHasName("test1");
+		}
+
+		@Bean
+		CookieSameSiteSupplier cookieSameSiteSupplier2() {
+			return CookieSameSiteSupplier.ofNone().whenHasName("test2");
 		}
 
 	}

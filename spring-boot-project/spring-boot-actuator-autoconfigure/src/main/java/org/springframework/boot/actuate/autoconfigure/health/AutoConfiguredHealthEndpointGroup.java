@@ -1,5 +1,5 @@
 /*
- * Copyright 2012-2019 the original author or authors.
+ * Copyright 2012-2021 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,14 +16,19 @@
 
 package org.springframework.boot.actuate.autoconfigure.health;
 
+import java.security.Principal;
 import java.util.Collection;
 import java.util.function.Predicate;
 
 import org.springframework.boot.actuate.autoconfigure.health.HealthProperties.Show;
 import org.springframework.boot.actuate.endpoint.SecurityContext;
+import org.springframework.boot.actuate.health.AdditionalHealthEndpointPath;
 import org.springframework.boot.actuate.health.HealthEndpointGroup;
 import org.springframework.boot.actuate.health.HttpCodeStatusMapper;
 import org.springframework.boot.actuate.health.StatusAggregator;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.GrantedAuthority;
+import org.springframework.util.ClassUtils;
 import org.springframework.util.CollectionUtils;
 
 /**
@@ -31,6 +36,7 @@ import org.springframework.util.CollectionUtils;
  *
  * @author Phillip Webb
  * @author Andy Wilkinson
+ * @author Madhura Bhave
  */
 class AutoConfiguredHealthEndpointGroup implements HealthEndpointGroup {
 
@@ -46,6 +52,8 @@ class AutoConfiguredHealthEndpointGroup implements HealthEndpointGroup {
 
 	private final Collection<String> roles;
 
+	private final AdditionalHealthEndpointPath additionalPath;
+
 	/**
 	 * Create a new {@link AutoConfiguredHealthEndpointGroup} instance.
 	 * @param members a predicate used to test for group membership
@@ -54,16 +62,18 @@ class AutoConfiguredHealthEndpointGroup implements HealthEndpointGroup {
 	 * @param showComponents the show components setting
 	 * @param showDetails the show details setting
 	 * @param roles the roles to match
+	 * @param additionalPath the additional path to use for this group
 	 */
 	AutoConfiguredHealthEndpointGroup(Predicate<String> members, StatusAggregator statusAggregator,
-			HttpCodeStatusMapper httpCodeStatusMapper, Show showComponents, Show showDetails,
-			Collection<String> roles) {
+			HttpCodeStatusMapper httpCodeStatusMapper, Show showComponents, Show showDetails, Collection<String> roles,
+			AdditionalHealthEndpointPath additionalPath) {
 		this.members = members;
 		this.statusAggregator = statusAggregator;
 		this.httpCodeStatusMapper = httpCodeStatusMapper;
 		this.showComponents = showComponents;
 		this.showDetails = showDetails;
 		this.roles = roles;
+		this.additionalPath = additionalPath;
 	}
 
 	@Override
@@ -97,10 +107,34 @@ class AutoConfiguredHealthEndpointGroup implements HealthEndpointGroup {
 	}
 
 	private boolean isAuthorized(SecurityContext securityContext) {
-		if (securityContext.getPrincipal() == null) {
+		Principal principal = securityContext.getPrincipal();
+		if (principal == null) {
 			return false;
 		}
-		return CollectionUtils.isEmpty(this.roles) || this.roles.stream().anyMatch(securityContext::isUserInRole);
+		if (CollectionUtils.isEmpty(this.roles)) {
+			return true;
+		}
+		boolean checkAuthorities = isSpringSecurityAuthentication(principal);
+		for (String role : this.roles) {
+			if (securityContext.isUserInRole(role)) {
+				return true;
+			}
+			if (checkAuthorities) {
+				Authentication authentication = (Authentication) principal;
+				for (GrantedAuthority authority : authentication.getAuthorities()) {
+					String name = authority.getAuthority();
+					if (role.equals(name)) {
+						return true;
+					}
+				}
+			}
+		}
+		return false;
+	}
+
+	private boolean isSpringSecurityAuthentication(Principal principal) {
+		return ClassUtils.isPresent("org.springframework.security.core.Authentication", null)
+				&& (principal instanceof Authentication);
 	}
 
 	@Override
@@ -111,6 +145,11 @@ class AutoConfiguredHealthEndpointGroup implements HealthEndpointGroup {
 	@Override
 	public HttpCodeStatusMapper getHttpCodeStatusMapper() {
 		return this.httpCodeStatusMapper;
+	}
+
+	@Override
+	public AdditionalHealthEndpointPath getAdditionalPath() {
+		return this.additionalPath;
 	}
 
 }

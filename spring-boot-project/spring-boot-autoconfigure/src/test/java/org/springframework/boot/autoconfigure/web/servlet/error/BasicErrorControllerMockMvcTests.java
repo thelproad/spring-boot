@@ -1,5 +1,5 @@
 /*
- * Copyright 2012-2019 the original author or authors.
+ * Copyright 2012-2021 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,10 +23,10 @@ import java.lang.annotation.RetentionPolicy;
 import java.lang.annotation.Target;
 import java.util.Map;
 
-import javax.servlet.DispatcherType;
-import javax.servlet.ServletContext;
-import javax.servlet.http.HttpServletRequest;
-import javax.servlet.http.HttpServletResponse;
+import jakarta.servlet.DispatcherType;
+import jakarta.servlet.ServletContext;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -67,8 +67,9 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * {@link SpringBootTest @SpringBootTest}.
  *
  * @author Dave Syer
+ * @author Scott Frederick
  */
-@SpringBootTest
+@SpringBootTest(properties = { "server.error.include-message=always" })
 @DirtiesContext
 class BasicErrorControllerMockMvcTests {
 
@@ -117,7 +118,7 @@ class BasicErrorControllerMockMvcTests {
 		// And the rendered status code is always wrong (but would be 400 in a real
 		// system)
 		String content = response.getResponse().getContentAsString();
-		assertThat(content).contains("Error count: 1");
+		assertThat(content).contains("Validation failed");
 	}
 
 	@Test
@@ -179,7 +180,7 @@ class BasicErrorControllerMockMvcTests {
 			}
 
 			@RequestMapping("/noContent")
-			void noContent() throws Exception {
+			void noContent() {
 				throw new NoContentException("Expected!");
 			}
 
@@ -211,9 +212,9 @@ class BasicErrorControllerMockMvcTests {
 
 	private class ErrorDispatcher implements RequestBuilder {
 
-		private MvcResult result;
+		private final MvcResult result;
 
-		private String path;
+		private final String path;
 
 		ErrorDispatcher(MvcResult result, String path) {
 			this.result = result;
@@ -225,7 +226,7 @@ class BasicErrorControllerMockMvcTests {
 			MockHttpServletRequest request = this.result.getRequest();
 			request.setDispatcherType(DispatcherType.ERROR);
 			request.setRequestURI(this.path);
-			request.setAttribute("javax.servlet.error.status_code", this.result.getResponse().getStatus());
+			request.setAttribute("jakarta.servlet.error.status_code", this.result.getResponse().getStatus());
 			return request;
 		}
 

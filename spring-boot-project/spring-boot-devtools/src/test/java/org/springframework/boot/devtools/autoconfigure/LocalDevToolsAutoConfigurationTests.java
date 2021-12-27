@@ -1,5 +1,5 @@
 /*
- * Copyright 2012-2019 the original author or authors.
+ * Copyright 2012-2021 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,7 +17,6 @@
 package org.springframework.boot.devtools.autoconfigure;
 
 import java.io.File;
-import java.time.Duration;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
@@ -30,13 +29,13 @@ import org.apache.jasper.EmbeddedServletOptions;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.thymeleaf.spring5.templateresolver.SpringResourceTemplateResolver;
 
 import org.springframework.beans.factory.NoSuchBeanDefinitionException;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.ImportAutoConfiguration;
-import org.springframework.boot.autoconfigure.thymeleaf.ThymeleafAutoConfiguration;
-import org.springframework.boot.autoconfigure.web.ResourceProperties;
+import org.springframework.boot.autoconfigure.freemarker.FreeMarkerAutoConfiguration;
+import org.springframework.boot.autoconfigure.web.WebProperties;
+import org.springframework.boot.autoconfigure.web.WebProperties.Resources;
 import org.springframework.boot.autoconfigure.web.servlet.ServletWebServerFactoryAutoConfiguration;
 import org.springframework.boot.devtools.classpath.ClassPathChangedEvent;
 import org.springframework.boot.devtools.classpath.ClassPathFileSystemWatcher;
@@ -55,6 +54,7 @@ import org.springframework.context.event.ContextRefreshedEvent;
 import org.springframework.data.redis.connection.RedisConnectionFactory;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.test.util.ReflectionTestUtils;
+import org.springframework.web.servlet.view.AbstractTemplateViewResolver;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
@@ -84,17 +84,10 @@ class LocalDevToolsAutoConfigurationTests {
 	}
 
 	@Test
-	void thymeleafCacheIsFalse() throws Exception {
-		this.context = getContext(() -> initializeAndRun(Config.class));
-		SpringResourceTemplateResolver resolver = this.context.getBean(SpringResourceTemplateResolver.class);
-		assertThat(resolver.isCacheable()).isFalse();
-	}
-
-	@Test
 	void defaultPropertyCanBeOverriddenFromCommandLine() throws Exception {
-		this.context = getContext(() -> initializeAndRun(Config.class, "--spring.thymeleaf.cache=true"));
-		SpringResourceTemplateResolver resolver = this.context.getBean(SpringResourceTemplateResolver.class);
-		assertThat(resolver.isCacheable()).isTrue();
+		this.context = getContext(() -> initializeAndRun(Config.class, "--spring.freemarker.cache=true"));
+		AbstractTemplateViewResolver resolver = this.context.getBean(AbstractTemplateViewResolver.class);
+		assertThat(resolver.isCache()).isTrue();
 	}
 
 	@Test
@@ -103,8 +96,8 @@ class LocalDevToolsAutoConfigurationTests {
 		System.setProperty("user.home", new File("src/test/resources/user-home").getAbsolutePath());
 		try {
 			this.context = getContext(() -> initializeAndRun(Config.class));
-			SpringResourceTemplateResolver resolver = this.context.getBean(SpringResourceTemplateResolver.class);
-			assertThat(resolver.isCacheable()).isTrue();
+			AbstractTemplateViewResolver resolver = this.context.getBean(AbstractTemplateViewResolver.class);
+			assertThat(resolver.isCache()).isTrue();
 		}
 		finally {
 			System.setProperty("user.home", userHome);
@@ -114,8 +107,8 @@ class LocalDevToolsAutoConfigurationTests {
 	@Test
 	void resourceCachePeriodIsZero() throws Exception {
 		this.context = getContext(() -> initializeAndRun(WebResourcesConfig.class));
-		ResourceProperties properties = this.context.getBean(ResourceProperties.class);
-		assertThat(properties.getCache().getPeriod()).isEqualTo(Duration.ZERO);
+		Resources properties = this.context.getBean(WebProperties.class).getResources();
+		assertThat(properties.getCache().getPeriod()).isZero();
 	}
 
 	@Test
@@ -214,8 +207,8 @@ class LocalDevToolsAutoConfigurationTests {
 		ClassPathFileSystemWatcher classPathWatcher = this.context.getBean(ClassPathFileSystemWatcher.class);
 		Object watcher = ReflectionTestUtils.getField(classPathWatcher, "fileSystemWatcher");
 		@SuppressWarnings("unchecked")
-		Map<File, Object> folders = (Map<File, Object>) ReflectionTestUtils.getField(watcher, "folders");
-		assertThat(folders).hasSize(2).containsKey(new File("src/main/java").getAbsoluteFile())
+		Map<File, Object> directories = (Map<File, Object>) ReflectionTestUtils.getField(watcher, "directories");
+		assertThat(directories).hasSize(2).containsKey(new File("src/main/java").getAbsoluteFile())
 				.containsKey(new File("src/test/java").getAbsoluteFile());
 	}
 
@@ -257,7 +250,6 @@ class LocalDevToolsAutoConfigurationTests {
 
 	private Map<String, Object> getDefaultProperties(Map<String, Object> specifiedProperties) {
 		Map<String, Object> properties = new HashMap<>();
-		properties.put("spring.thymeleaf.check-template-location", false);
 		properties.put("spring.devtools.livereload.port", 0);
 		properties.put("server.port", 0);
 		properties.putAll(specifiedProperties);
@@ -266,14 +258,14 @@ class LocalDevToolsAutoConfigurationTests {
 
 	@Configuration(proxyBeanMethods = false)
 	@Import({ ServletWebServerFactoryAutoConfiguration.class, LocalDevToolsAutoConfiguration.class,
-			ThymeleafAutoConfiguration.class })
+			FreeMarkerAutoConfiguration.class })
 	static class Config {
 
 	}
 
 	@Configuration(proxyBeanMethods = false)
 	@ImportAutoConfiguration({ ServletWebServerFactoryAutoConfiguration.class, LocalDevToolsAutoConfiguration.class,
-			ThymeleafAutoConfiguration.class })
+			FreeMarkerAutoConfiguration.class })
 	static class ConfigWithMockLiveReload {
 
 		@Bean
@@ -285,7 +277,7 @@ class LocalDevToolsAutoConfigurationTests {
 
 	@Configuration(proxyBeanMethods = false)
 	@Import({ ServletWebServerFactoryAutoConfiguration.class, LocalDevToolsAutoConfiguration.class,
-			ResourceProperties.class })
+			WebProperties.class })
 	static class WebResourcesConfig {
 
 	}

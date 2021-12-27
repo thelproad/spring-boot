@@ -1,5 +1,5 @@
 /*
- * Copyright 2012-2019 the original author or authors.
+ * Copyright 2012-2021 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -34,8 +34,10 @@ import static org.assertj.core.api.Assertions.assertThat;
  *
  * @author Madhura Bhave
  * @author Stephane Nicoll
+ * @author Scott Frederick
  */
-@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
+@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
+		properties = { "server.error.include-message=always" })
 class SampleActuatorCustomSecurityApplicationTests extends AbstractSampleActuatorCustomSecurityTests {
 
 	@LocalServerPort
@@ -60,11 +62,10 @@ class SampleActuatorCustomSecurityApplicationTests extends AbstractSampleActuato
 	}
 
 	@Test
+	@SuppressWarnings({ "rawtypes", "unchecked" })
 	void testInsecureApplicationPath() {
-		@SuppressWarnings("rawtypes")
 		ResponseEntity<Map> entity = restTemplate().getForEntity(getPath() + "/foo", Map.class);
 		assertThat(entity.getStatusCode()).isEqualTo(HttpStatus.INTERNAL_SERVER_ERROR);
-		@SuppressWarnings("unchecked")
 		Map<String, Object> body = entity.getBody();
 		assertThat((String) body.get("message")).contains("Expected exception in controller");
 	}

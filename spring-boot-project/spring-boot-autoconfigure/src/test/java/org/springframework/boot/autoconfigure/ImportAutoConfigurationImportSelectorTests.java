@@ -1,5 +1,5 @@
 /*
- * Copyright 2012-2019 the original author or authors.
+ * Copyright 2012-2021 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -25,22 +25,19 @@ import java.util.Set;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.mockito.Mock;
-import org.mockito.MockitoAnnotations;
 
 import org.springframework.beans.factory.config.ConfigurableListableBeanFactory;
 import org.springframework.beans.factory.support.DefaultListableBeanFactory;
 import org.springframework.boot.autoconfigure.freemarker.FreeMarkerAutoConfiguration;
-import org.springframework.boot.autoconfigure.thymeleaf.ThymeleafAutoConfiguration;
+import org.springframework.boot.autoconfigure.groovy.template.GroovyTemplateAutoConfiguration;
 import org.springframework.core.annotation.AliasFor;
-import org.springframework.core.env.Environment;
 import org.springframework.core.io.DefaultResourceLoader;
 import org.springframework.core.type.AnnotationMetadata;
 import org.springframework.core.type.classreading.SimpleMetadataReaderFactory;
+import org.springframework.mock.env.MockEnvironment;
 import org.springframework.util.ClassUtils;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.Mockito.verifyNoInteractions;
 
 /**
  * Tests for {@link ImportAutoConfigurationImportSelector}.
@@ -54,12 +51,10 @@ class ImportAutoConfigurationImportSelectorTests {
 
 	private final ConfigurableListableBeanFactory beanFactory = new DefaultListableBeanFactory();
 
-	@Mock
-	private Environment environment;
+	private final MockEnvironment environment = new MockEnvironment();
 
 	@BeforeEach
 	void setup() {
-		MockitoAnnotations.initMocks(this);
 		this.importSelector.setBeanFactory(this.beanFactory);
 		this.importSelector.setEnvironment(this.environment);
 		this.importSelector.setResourceLoader(new DefaultResourceLoader());
@@ -80,10 +75,11 @@ class ImportAutoConfigurationImportSelectorTests {
 	}
 
 	@Test
-	void propertyExclusionsAreNotApplied() throws Exception {
-		AnnotationMetadata annotationMetadata = getAnnotationMetadata(ImportFreeMarker.class);
-		this.importSelector.selectImports(annotationMetadata);
-		verifyNoInteractions(this.environment);
+	void propertyExclusionsAreApplied() throws IOException {
+		this.environment.setProperty("spring.autoconfigure.exclude", FreeMarkerAutoConfiguration.class.getName());
+		AnnotationMetadata annotationMetadata = getAnnotationMetadata(MultipleImports.class);
+		String[] imports = this.importSelector.selectImports(annotationMetadata);
+		assertThat(imports).containsExactly(GroovyTemplateAutoConfiguration.class.getName());
 	}
 
 	@Test
@@ -91,14 +87,14 @@ class ImportAutoConfigurationImportSelectorTests {
 		AnnotationMetadata annotationMetadata = getAnnotationMetadata(MultipleImports.class);
 		String[] imports = this.importSelector.selectImports(annotationMetadata);
 		assertThat(imports).containsOnly(FreeMarkerAutoConfiguration.class.getName(),
-				ThymeleafAutoConfiguration.class.getName());
+				GroovyTemplateAutoConfiguration.class.getName());
 	}
 
 	@Test
 	void selfAnnotatingAnnotationDoesNotCauseStackOverflow() throws IOException {
 		AnnotationMetadata annotationMetadata = getAnnotationMetadata(ImportWithSelfAnnotatingAnnotation.class);
 		String[] imports = this.importSelector.selectImports(annotationMetadata);
-		assertThat(imports).containsOnly(ThymeleafAutoConfiguration.class.getName());
+		assertThat(imports).containsOnly(GroovyTemplateAutoConfiguration.class.getName());
 	}
 
 	@Test
@@ -171,12 +167,12 @@ class ImportAutoConfigurationImportSelectorTests {
 
 	@Test
 	void determineImportsShouldNotSetPackageImport() throws Exception {
-		Class<?> packageImportClass = ClassUtils.resolveClassName(
-				"org.springframework.boot.autoconfigure.AutoConfigurationPackages.PackageImport", null);
+		Class<?> packageImportsClass = ClassUtils.resolveClassName(
+				"org.springframework.boot.autoconfigure.AutoConfigurationPackages.PackageImports", null);
 		Set<Object> selectedImports = this.importSelector
 				.determineImports(getAnnotationMetadata(ImportMetaAutoConfigurationExcludeWithUnrelatedOne.class));
 		for (Object selectedImport : selectedImports) {
-			assertThat(selectedImport).isNotInstanceOf(packageImportClass);
+			assertThat(selectedImport).isNotInstanceOf(packageImportsClass);
 		}
 	}
 
@@ -202,13 +198,13 @@ class ImportAutoConfigurationImportSelectorTests {
 
 	@ImportOne
 	@ImportTwo
-	@ImportAutoConfiguration(exclude = ThymeleafAutoConfiguration.class)
+	@ImportAutoConfiguration(exclude = GroovyTemplateAutoConfiguration.class)
 	static class MultipleImportsWithExclusion {
 
 	}
 
 	@ImportOne
-	@ImportAutoConfiguration(exclude = ThymeleafAutoConfiguration.class)
+	@ImportAutoConfiguration(exclude = GroovyTemplateAutoConfiguration.class)
 	static class ExclusionWithoutImport {
 
 	}
@@ -218,7 +214,7 @@ class ImportAutoConfigurationImportSelectorTests {
 
 	}
 
-	@SelfAnnotating(excludeAutoConfiguration = ThymeleafAutoConfiguration.class)
+	@SelfAnnotating(excludeAutoConfiguration = GroovyTemplateAutoConfiguration.class)
 	static class ImportWithSelfAnnotatingAnnotationExclude {
 
 	}
@@ -230,7 +226,7 @@ class ImportAutoConfigurationImportSelectorTests {
 	}
 
 	@Retention(RetentionPolicy.RUNTIME)
-	@ImportAutoConfiguration(ThymeleafAutoConfiguration.class)
+	@ImportAutoConfiguration(GroovyTemplateAutoConfiguration.class)
 	@interface ImportTwo {
 
 	}
@@ -259,25 +255,25 @@ class ImportAutoConfigurationImportSelectorTests {
 
 	}
 
-	@ImportAutoConfiguration(classes = ThymeleafAutoConfiguration.class)
+	@ImportAutoConfiguration(classes = GroovyTemplateAutoConfiguration.class)
 	@UnrelatedOne
 	static class ImportAutoConfigurationWithItemsOne {
 
 	}
 
-	@ImportAutoConfiguration(classes = ThymeleafAutoConfiguration.class)
+	@ImportAutoConfiguration(classes = GroovyTemplateAutoConfiguration.class)
 	@UnrelatedTwo
 	static class ImportAutoConfigurationWithItemsTwo {
 
 	}
 
-	@MetaImportAutoConfiguration(exclude = ThymeleafAutoConfiguration.class)
+	@MetaImportAutoConfiguration(exclude = GroovyTemplateAutoConfiguration.class)
 	@UnrelatedOne
 	static class ImportMetaAutoConfigurationExcludeWithUnrelatedOne {
 
 	}
 
-	@MetaImportAutoConfiguration(exclude = ThymeleafAutoConfiguration.class)
+	@MetaImportAutoConfiguration(exclude = GroovyTemplateAutoConfiguration.class)
 	@UnrelatedTwo
 	static class ImportMetaAutoConfigurationExcludeWithUnrelatedTwo {
 
@@ -288,7 +284,9 @@ class ImportAutoConfigurationImportSelectorTests {
 	@interface MetaImportAutoConfiguration {
 
 		@AliasFor(annotation = ImportAutoConfiguration.class)
-		Class<?>[] exclude() default {};
+		Class<?>[] exclude() default {
+
+		};
 
 	}
 
@@ -303,12 +301,14 @@ class ImportAutoConfigurationImportSelectorTests {
 	}
 
 	@Retention(RetentionPolicy.RUNTIME)
-	@ImportAutoConfiguration(ThymeleafAutoConfiguration.class)
+	@ImportAutoConfiguration(GroovyTemplateAutoConfiguration.class)
 	@SelfAnnotating
 	@interface SelfAnnotating {
 
 		@AliasFor(annotation = ImportAutoConfiguration.class, attribute = "exclude")
-		Class<?>[] excludeAutoConfiguration() default {};
+		Class<?>[] excludeAutoConfiguration() default {
+
+		};
 
 	}
 
@@ -317,7 +317,7 @@ class ImportAutoConfigurationImportSelectorTests {
 		@Override
 		protected Collection<String> loadFactoryNames(Class<?> source) {
 			if (source == MetaImportAutoConfiguration.class) {
-				return Arrays.asList(ThymeleafAutoConfiguration.class.getName(),
+				return Arrays.asList(GroovyTemplateAutoConfiguration.class.getName(),
 						FreeMarkerAutoConfiguration.class.getName());
 			}
 			return super.loadFactoryNames(source);

@@ -1,5 +1,5 @@
 /*
- * Copyright 2012-2019 the original author or authors.
+ * Copyright 2012-2021 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -61,16 +61,17 @@ public class DevToolsPropertyDefaultsPostProcessor implements EnvironmentPostPro
 
 	static {
 		Map<String, Object> properties = new HashMap<>();
-		properties.put("spring.thymeleaf.cache", "false");
 		properties.put("spring.freemarker.cache", "false");
 		properties.put("spring.groovy.template.cache", "false");
 		properties.put("spring.mustache.cache", "false");
 		properties.put("server.servlet.session.persistent", "true");
 		properties.put("spring.h2.console.enabled", "true");
-		properties.put("spring.resources.cache.period", "0");
-		properties.put("spring.resources.chain.cache", "false");
+		properties.put("spring.web.resources.cache.period", "0");
+		properties.put("spring.web.resources.chain.cache", "false");
 		properties.put("spring.template.provider.cache", "false");
 		properties.put("spring.mvc.log-resolved-exception", "true");
+		properties.put("server.error.include-binding-errors", "ALWAYS");
+		properties.put("server.error.include-message", "ALWAYS");
 		properties.put("server.error.include-stacktrace", "ALWAYS");
 		properties.put("server.servlet.jsp.init-parameters.development", "true");
 		properties.put("spring.reactor.debug", "true");

@@ -1,5 +1,5 @@
 /*
- * Copyright 2012-2019 the original author or authors.
+ * Copyright 2012-2021 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -32,10 +32,12 @@ import org.gradle.api.file.CopySpec;
 import org.gradle.api.file.FileCollection;
 import org.gradle.api.internal.IConventionAware;
 import org.gradle.api.plugins.ApplicationPlugin;
-import org.gradle.api.plugins.ApplicationPluginConvention;
+import org.gradle.api.plugins.JavaApplication;
 import org.gradle.api.provider.Property;
 import org.gradle.api.provider.Provider;
 import org.gradle.jvm.application.scripts.TemplateBasedScriptGenerator;
+import org.gradle.jvm.application.tasks.CreateStartScripts;
+import org.gradle.util.GradleVersion;
 
 import org.springframework.boot.gradle.tasks.application.CreateBootStartScripts;
 
@@ -48,13 +50,12 @@ final class ApplicationPluginAction implements PluginApplicationAction {
 
 	@Override
 	public void execute(Project project) {
-		ApplicationPluginConvention applicationConvention = project.getConvention()
-				.getPlugin(ApplicationPluginConvention.class);
+		JavaApplication javaApplication = project.getExtensions().getByType(JavaApplication.class);
 		DistributionContainer distributions = project.getExtensions().getByType(DistributionContainer.class);
 		Distribution distribution = distributions.create("boot");
-		configureBaseNameConvention(project, applicationConvention, distribution);
-		CreateBootStartScripts bootStartScripts = project.getTasks().create("bootStartScripts",
-				CreateBootStartScripts.class);
+		configureBaseNameConvention(project, javaApplication, distribution);
+		CreateStartScripts bootStartScripts = project.getTasks().create("bootStartScripts",
+				determineCreateStartScriptsClass());
 		bootStartScripts
 				.setDescription("Generates OS-specific start scripts to run the project as a Spring Boot application.");
 		((TemplateBasedScriptGenerator) bootStartScripts.getUnixStartScriptGenerator())
@@ -71,16 +72,23 @@ final class ApplicationPluginAction implements PluginApplicationAction {
 			}
 		});
 		bootStartScripts.getConventionMapping().map("outputDir", () -> new File(project.getBuildDir(), "bootScripts"));
-		bootStartScripts.getConventionMapping().map("applicationName", applicationConvention::getApplicationName);
-		bootStartScripts.getConventionMapping().map("defaultJvmOpts",
-				applicationConvention::getApplicationDefaultJvmArgs);
+		bootStartScripts.getConventionMapping().map("applicationName", javaApplication::getApplicationName);
+		bootStartScripts.getConventionMapping().map("defaultJvmOpts", javaApplication::getApplicationDefaultJvmArgs);
 		CopySpec binCopySpec = project.copySpec().into("bin").from(bootStartScripts);
 		binCopySpec.setFileMode(0755);
 		distribution.getContents().with(binCopySpec);
 	}
 
+	private Class<? extends CreateStartScripts> determineCreateStartScriptsClass() {
+		return isGradle64OrLater() ? CreateStartScripts.class : CreateBootStartScripts.class;
+	}
+
+	private boolean isGradle64OrLater() {
+		return GradleVersion.current().getBaseVersion().compareTo(GradleVersion.version("6.4")) >= 0;
+	}
+
 	@SuppressWarnings("unchecked")
-	private void configureBaseNameConvention(Project project, ApplicationPluginConvention applicationConvention,
+	private void configureBaseNameConvention(Project project, JavaApplication javaApplication,
 			Distribution distribution) {
 		Method getDistributionBaseName = findMethod(distribution.getClass(), "getDistributionBaseName");
 		if (getDistributionBaseName != null) {
@@ -88,7 +96,7 @@ final class ApplicationPluginAction implements PluginApplicationAction {
 				Property<String> distributionBaseName = (Property<String>) distribution.getClass()
 						.getMethod("getDistributionBaseName").invoke(distribution);
 				distributionBaseName.getClass().getMethod("convention", Provider.class).invoke(distributionBaseName,
-						project.provider(() -> applicationConvention.getApplicationName() + "-boot"));
+						project.provider(() -> javaApplication.getApplicationName() + "-boot"));
 				return;
 			}
 			catch (Exception ex) {
@@ -97,7 +105,7 @@ final class ApplicationPluginAction implements PluginApplicationAction {
 		}
 		if (distribution instanceof IConventionAware) {
 			((IConventionAware) distribution).getConventionMapping().map("baseName",
-					() -> applicationConvention.getApplicationName() + "-boot");
+					() -> javaApplication.getApplicationName() + "-boot");
 		}
 	}
 
@@ -118,7 +126,7 @@ final class ApplicationPluginAction implements PluginApplicationAction {
 	private String loadResource(String name) {
 		try (InputStreamReader reader = new InputStreamReader(getClass().getResourceAsStream(name))) {
 			char[] buffer = new char[4096];
-			int read = 0;
+			int read;
 			StringWriter writer = new StringWriter();
 			while ((read = reader.read(buffer)) > 0) {
 				writer.write(buffer, 0, read);

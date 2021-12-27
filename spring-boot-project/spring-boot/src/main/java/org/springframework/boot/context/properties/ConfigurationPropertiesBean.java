@@ -1,5 +1,5 @@
 /*
- * Copyright 2012-2019 the original author or authors.
+ * Copyright 2012-2020 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -249,7 +249,7 @@ public final class ConfigurationPropertiesBean {
 	static ConfigurationPropertiesBean forValueObject(Class<?> beanClass, String beanName) {
 		ConfigurationPropertiesBean propertiesBean = create(beanName, null, beanClass, null);
 		Assert.state(propertiesBean != null && propertiesBean.getBindMethod() == BindMethod.VALUE_OBJECT,
-				"Bean '" + beanName + "' is not a @ConfigurationProperties value object");
+				() -> "Bean '" + beanName + "' is not a @ConfigurationProperties value object");
 		return propertiesBean;
 	}
 
@@ -308,7 +308,7 @@ public final class ConfigurationPropertiesBean {
 		VALUE_OBJECT;
 
 		static BindMethod forType(Class<?> type) {
-			return (ConfigurationPropertiesBindConstructorProvider.INSTANCE.getBindConstructor(type) != null)
+			return (ConfigurationPropertiesBindConstructorProvider.INSTANCE.getBindConstructor(type, false) != null)
 					? VALUE_OBJECT : JAVA_BEAN;
 		}
 

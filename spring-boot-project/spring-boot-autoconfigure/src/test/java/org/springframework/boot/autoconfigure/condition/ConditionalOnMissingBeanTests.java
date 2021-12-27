@@ -1,5 +1,5 @@
 /*
- * Copyright 2012-2019 the original author or authors.
+ * Copyright 2012-2021 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,6 +21,7 @@ import java.lang.annotation.ElementType;
 import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
 import java.lang.annotation.Target;
+import java.util.Collection;
 import java.util.Date;
 import java.util.function.Consumer;
 
@@ -30,6 +31,7 @@ import org.springframework.beans.factory.FactoryBean;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.beans.factory.support.BeanDefinitionBuilder;
 import org.springframework.beans.factory.support.BeanDefinitionRegistry;
+import org.springframework.boot.autoconfigure.condition.scan.ScanBean;
 import org.springframework.boot.autoconfigure.condition.scan.ScannedFactoryBeanConfiguration;
 import org.springframework.boot.autoconfigure.condition.scan.ScannedFactoryBeanWithBeanMethodArgumentsConfiguration;
 import org.springframework.boot.autoconfigure.context.PropertyPlaceholderAutoConfiguration;
@@ -59,7 +61,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * @author Andy Wilkinson
  */
 @SuppressWarnings("resource")
-public class ConditionalOnMissingBeanTests {
+class ConditionalOnMissingBeanTests {
 
 	private final ApplicationContextRunner contextRunner = new ApplicationContextRunner();
 
@@ -137,6 +139,17 @@ public class ConditionalOnMissingBeanTests {
 	}
 
 	@Test
+	void testOnMissingBeanConditionOutputShouldNotContainConditionalOnBeanClassInMessage() {
+		this.contextRunner.withUserConfiguration(OnBeanNameConfiguration.class).run((context) -> {
+			Collection<ConditionEvaluationReport.ConditionAndOutcomes> conditionAndOutcomes = ConditionEvaluationReport
+					.get(context.getSourceApplicationContext().getBeanFactory()).getConditionAndOutcomesBySource()
+					.values();
+			String message = conditionAndOutcomes.iterator().next().iterator().next().getOutcome().getMessage();
+			assertThat(message).doesNotContain("@ConditionalOnBean");
+		});
+	}
+
+	@Test
 	void testOnMissingBeanConditionWithFactoryBean() {
 		this.contextRunner
 				.withUserConfiguration(FactoryBeanConfiguration.class, ConditionalOnFactoryBean.class,
@@ -149,7 +162,7 @@ public class ConditionalOnMissingBeanTests {
 		this.contextRunner
 				.withUserConfiguration(ComponentScannedFactoryBeanBeanMethodConfiguration.class,
 						ConditionalOnFactoryBean.class, PropertyPlaceholderAutoConfiguration.class)
-				.run((context) -> assertThat(context.getBean(ExampleBean.class).toString()).isEqualTo("fromFactory"));
+				.run((context) -> assertThat(context.getBean(ScanBean.class).toString()).isEqualTo("fromFactory"));
 	}
 
 	@Test
@@ -157,7 +170,7 @@ public class ConditionalOnMissingBeanTests {
 		this.contextRunner
 				.withUserConfiguration(ComponentScannedFactoryBeanBeanMethodWithArgumentsConfiguration.class,
 						ConditionalOnFactoryBean.class, PropertyPlaceholderAutoConfiguration.class)
-				.run((context) -> assertThat(context.getBean(ExampleBean.class).toString()).isEqualTo("fromFactory"));
+				.run((context) -> assertThat(context.getBean(ScanBean.class).toString()).isEqualTo("fromFactory"));
 	}
 
 	@Test
@@ -380,7 +393,7 @@ public class ConditionalOnMissingBeanTests {
 	}
 
 	@Configuration(proxyBeanMethods = false)
-	@ComponentScan(basePackages = "org.springframework.boot.autoconfigure.condition.scan",
+	@ComponentScan(basePackages = "org.springframework.boot.autoconfigure.condition.scan", useDefaultFilters = false,
 			includeFilters = @Filter(type = FilterType.ASSIGNABLE_TYPE,
 					classes = ScannedFactoryBeanConfiguration.class))
 	static class ComponentScannedFactoryBeanBeanMethodConfiguration {
@@ -388,7 +401,7 @@ public class ConditionalOnMissingBeanTests {
 	}
 
 	@Configuration(proxyBeanMethods = false)
-	@ComponentScan(basePackages = "org.springframework.boot.autoconfigure.condition.scan",
+	@ComponentScan(basePackages = "org.springframework.boot.autoconfigure.condition.scan", useDefaultFilters = false,
 			includeFilters = @Filter(type = FilterType.ASSIGNABLE_TYPE,
 					classes = ScannedFactoryBeanWithBeanMethodArgumentsConfiguration.class))
 	static class ComponentScannedFactoryBeanBeanMethodWithArgumentsConfiguration {
@@ -436,7 +449,7 @@ public class ConditionalOnMissingBeanTests {
 
 		@Override
 		public void registerBeanDefinitions(AnnotationMetadata meta, BeanDefinitionRegistry registry) {
-			BeanDefinitionBuilder builder = BeanDefinitionBuilder.genericBeanDefinition(NonspecificFactoryBean.class);
+			BeanDefinitionBuilder builder = BeanDefinitionBuilder.rootBeanDefinition(NonspecificFactoryBean.class);
 			builder.addConstructorArgValue("foo");
 			builder.getBeanDefinition().setAttribute(FactoryBean.OBJECT_TYPE_ATTRIBUTE, ExampleBean.class);
 			registry.registerBeanDefinition("exampleBeanFactoryBean", builder.getBeanDefinition());
@@ -454,7 +467,7 @@ public class ConditionalOnMissingBeanTests {
 
 		@Override
 		public void registerBeanDefinitions(AnnotationMetadata meta, BeanDefinitionRegistry registry) {
-			BeanDefinitionBuilder builder = BeanDefinitionBuilder.genericBeanDefinition(NonspecificFactoryBean.class);
+			BeanDefinitionBuilder builder = BeanDefinitionBuilder.rootBeanDefinition(NonspecificFactoryBean.class);
 			builder.addConstructorArgValue("foo");
 			builder.getBeanDefinition().setAttribute(FactoryBean.OBJECT_TYPE_ATTRIBUTE, ExampleBean.class.getName());
 			registry.registerBeanDefinition("exampleBeanFactoryBean", builder.getBeanDefinition());
@@ -472,7 +485,7 @@ public class ConditionalOnMissingBeanTests {
 
 		@Override
 		public void registerBeanDefinitions(AnnotationMetadata meta, BeanDefinitionRegistry registry) {
-			BeanDefinitionBuilder builder = BeanDefinitionBuilder.genericBeanDefinition(ExampleFactoryBean.class);
+			BeanDefinitionBuilder builder = BeanDefinitionBuilder.rootBeanDefinition(ExampleFactoryBean.class);
 			builder.addConstructorArgValue("foo");
 			registry.registerBeanDefinition("exampleBeanFactoryBean", builder.getBeanDefinition());
 		}
@@ -605,9 +618,9 @@ public class ConditionalOnMissingBeanTests {
 
 	}
 
-	public static class ExampleFactoryBean implements FactoryBean<ExampleBean> {
+	static class ExampleFactoryBean implements FactoryBean<ExampleBean> {
 
-		public ExampleFactoryBean(String value) {
+		ExampleFactoryBean(String value) {
 			Assert.state(!value.contains("$"), "value should not contain '$'");
 		}
 
@@ -726,11 +739,11 @@ public class ConditionalOnMissingBeanTests {
 	}
 
 	@TestAnnotation
-	public static class ExampleBean {
+	static class ExampleBean {
 
 		private String value;
 
-		public ExampleBean(String value) {
+		ExampleBean(String value) {
 			this.value = value;
 		}
 

@@ -1,5 +1,5 @@
 /*
- * Copyright 2012-2019 the original author or authors.
+ * Copyright 2012-2021 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,9 +18,9 @@ package org.springframework.boot.web.servlet;
 
 import java.io.IOException;
 
-import javax.servlet.ServletContextAttributeEvent;
-import javax.servlet.ServletContextAttributeListener;
-import javax.servlet.annotation.WebListener;
+import jakarta.servlet.ServletContextAttributeEvent;
+import jakarta.servlet.ServletContextAttributeListener;
+import jakarta.servlet.annotation.WebListener;
 
 import org.junit.jupiter.api.Test;
 
@@ -49,7 +49,7 @@ class WebListenerHandlerTests {
 		given(definition.getMetadata()).willReturn(new SimpleMetadataReaderFactory()
 				.getMetadataReader(TestListener.class.getName()).getAnnotationMetadata());
 		this.handler.handle(definition, this.registry);
-		this.registry.getBeanDefinition(TestListener.class.getName());
+		this.registry.getBeanDefinition(TestListener.class.getName() + "Registrar");
 	}
 
 	@WebListener

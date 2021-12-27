@@ -1,5 +1,5 @@
 /*
- * Copyright 2012-2019 the original author or authors.
+ * Copyright 2012-2021 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,9 +16,6 @@
 
 package smoketest.security.method;
 
-import java.util.Date;
-import java.util.Map;
-
 import org.springframework.boot.actuate.autoconfigure.security.servlet.EndpointRequest;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.builder.SpringApplicationBuilder;
@@ -29,10 +26,9 @@ import org.springframework.core.annotation.Order;
 import org.springframework.security.access.annotation.Secured;
 import org.springframework.security.config.annotation.method.configuration.EnableGlobalMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
-import org.springframework.security.config.annotation.web.configuration.WebSecurityConfigurerAdapter;
 import org.springframework.security.core.userdetails.User;
 import org.springframework.security.provisioning.InMemoryUserDetailsManager;
-import org.springframework.security.web.util.matcher.AntPathRequestMatcher;
+import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.stereotype.Controller;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.servlet.config.annotation.ViewControllerRegistry;
@@ -68,33 +64,30 @@ public class SampleMethodSecurityApplication implements WebMvcConfigurer {
 	}
 
 	@Configuration(proxyBeanMethods = false)
-	protected static class ApplicationSecurity extends WebSecurityConfigurerAdapter {
+	protected static class ApplicationSecurity {
 
-		@Override
-		protected void configure(HttpSecurity http) throws Exception {
-			http.authorizeRequests((requests) -> {
-				requests.antMatchers("/login").permitAll();
-				requests.anyRequest().fullyAuthenticated();
-			});
-			http.formLogin((form) -> {
-				form.loginPage("/login");
-				form.failureUrl("/login?error");
-			});
-			http.logout((logout) -> logout.logoutRequestMatcher(new AntPathRequestMatcher("/logout")));
-			http.exceptionHandling((exceptions) -> exceptions.accessDeniedPage("/access?error"));
+		@Bean
+		SecurityFilterChain configure(HttpSecurity http) throws Exception {
+			http.csrf().disable();
+			http.authorizeRequests((requests) -> requests.anyRequest().fullyAuthenticated());
+			http.formLogin((form) -> form.loginPage("/login").permitAll());
+			http.exceptionHandling((exceptions) -> exceptions.accessDeniedPage("/access"));
+			return http.build();
 		}
 
 	}
 
 	@Configuration(proxyBeanMethods = false)
 	@Order(1)
-	protected static class ActuatorSecurity extends WebSecurityConfigurerAdapter {
+	protected static class ActuatorSecurity {
 
-		@Override
-		protected void configure(HttpSecurity http) throws Exception {
+		@Bean
+		SecurityFilterChain actuatorSecurity(HttpSecurity http) throws Exception {
+			http.csrf().disable();
 			http.requestMatcher(EndpointRequest.toAnyEndpoint());
 			http.authorizeRequests((requests) -> requests.anyRequest().authenticated());
 			http.httpBasic();
+			return http.build();
 		}
 
 	}
@@ -104,10 +97,7 @@ public class SampleMethodSecurityApplication implements WebMvcConfigurer {
 
 		@GetMapping("/")
 		@Secured("ROLE_ADMIN")
-		public String home(Map<String, Object> model) {
-			model.put("message", "Hello World");
-			model.put("title", "Hello Home");
-			model.put("date", new Date());
+		public String home() {
 			return "home";
 		}
 

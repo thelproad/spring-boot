@@ -1,5 +1,5 @@
 /*
- * Copyright 2012-2019 the original author or authors.
+ * Copyright 2012-2021 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -26,12 +26,15 @@ import org.springframework.kafka.annotation.EnableKafka;
 import org.springframework.kafka.config.ConcurrentKafkaListenerContainerFactory;
 import org.springframework.kafka.config.KafkaListenerConfigUtils;
 import org.springframework.kafka.core.ConsumerFactory;
+import org.springframework.kafka.core.DefaultKafkaConsumerFactory;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.kafka.listener.AfterRollbackProcessor;
 import org.springframework.kafka.listener.BatchErrorHandler;
+import org.springframework.kafka.listener.CommonErrorHandler;
 import org.springframework.kafka.listener.ConsumerAwareRebalanceListener;
 import org.springframework.kafka.listener.ErrorHandler;
 import org.springframework.kafka.listener.RecordInterceptor;
+import org.springframework.kafka.listener.adapter.RecordFilterStrategy;
 import org.springframework.kafka.support.converter.BatchMessageConverter;
 import org.springframework.kafka.support.converter.BatchMessagingMessageConverter;
 import org.springframework.kafka.support.converter.MessageConverter;
@@ -52,6 +55,8 @@ class KafkaAnnotationDrivenConfiguration {
 
 	private final RecordMessageConverter messageConverter;
 
+	private final RecordFilterStrategy<Object, Object> recordFilterStrategy;
+
 	private final BatchMessageConverter batchMessageConverter;
 
 	private final KafkaTemplate<Object, Object> kafkaTemplate;
@@ -64,21 +69,25 @@ class KafkaAnnotationDrivenConfiguration {
 
 	private final BatchErrorHandler batchErrorHandler;
 
+	private final CommonErrorHandler commonErrorHandler;
+
 	private final AfterRollbackProcessor<Object, Object> afterRollbackProcessor;
 
 	private final RecordInterceptor<Object, Object> recordInterceptor;
 
 	KafkaAnnotationDrivenConfiguration(KafkaProperties properties,
 			ObjectProvider<RecordMessageConverter> messageConverter,
+			ObjectProvider<RecordFilterStrategy<Object, Object>> recordFilterStrategy,
 			ObjectProvider<BatchMessageConverter> batchMessageConverter,
 			ObjectProvider<KafkaTemplate<Object, Object>> kafkaTemplate,
 			ObjectProvider<KafkaAwareTransactionManager<Object, Object>> kafkaTransactionManager,
 			ObjectProvider<ConsumerAwareRebalanceListener> rebalanceListener, ObjectProvider<ErrorHandler> errorHandler,
-			ObjectProvider<BatchErrorHandler> batchErrorHandler,
+			ObjectProvider<BatchErrorHandler> batchErrorHandler, ObjectProvider<CommonErrorHandler> commonErrorHandler,
 			ObjectProvider<AfterRollbackProcessor<Object, Object>> afterRollbackProcessor,
 			ObjectProvider<RecordInterceptor<Object, Object>> recordInterceptor) {
 		this.properties = properties;
 		this.messageConverter = messageConverter.getIfUnique();
+		this.recordFilterStrategy = recordFilterStrategy.getIfUnique();
 		this.batchMessageConverter = batchMessageConverter
 				.getIfUnique(() -> new BatchMessagingMessageConverter(this.messageConverter));
 		this.kafkaTemplate = kafkaTemplate.getIfUnique();
@@ -86,6 +95,7 @@ class KafkaAnnotationDrivenConfiguration {
 		this.rebalanceListener = rebalanceListener.getIfUnique();
 		this.errorHandler = errorHandler.getIfUnique();
 		this.batchErrorHandler = batchErrorHandler.getIfUnique();
+		this.commonErrorHandler = commonErrorHandler.getIfUnique();
 		this.afterRollbackProcessor = afterRollbackProcessor.getIfUnique();
 		this.recordInterceptor = recordInterceptor.getIfUnique();
 	}
@@ -98,11 +108,13 @@ class KafkaAnnotationDrivenConfiguration {
 		MessageConverter messageConverterToUse = (this.properties.getListener().getType().equals(Type.BATCH))
 				? this.batchMessageConverter : this.messageConverter;
 		configurer.setMessageConverter(messageConverterToUse);
+		configurer.setRecordFilterStrategy(this.recordFilterStrategy);
 		configurer.setReplyTemplate(this.kafkaTemplate);
 		configurer.setTransactionManager(this.transactionManager);
 		configurer.setRebalanceListener(this.rebalanceListener);
 		configurer.setErrorHandler(this.errorHandler);
 		configurer.setBatchErrorHandler(this.batchErrorHandler);
+		configurer.setCommonErrorHandler(this.commonErrorHandler);
 		configurer.setAfterRollbackProcessor(this.afterRollbackProcessor);
 		configurer.setRecordInterceptor(this.recordInterceptor);
 		return configurer;
@@ -112,9 +124,10 @@ class KafkaAnnotationDrivenConfiguration {
 	@ConditionalOnMissingBean(name = "kafkaListenerContainerFactory")
 	ConcurrentKafkaListenerContainerFactory<?, ?> kafkaListenerContainerFactory(
 			ConcurrentKafkaListenerContainerFactoryConfigurer configurer,
-			ConsumerFactory<Object, Object> kafkaConsumerFactory) {
+			ObjectProvider<ConsumerFactory<Object, Object>> kafkaConsumerFactory) {
 		ConcurrentKafkaListenerContainerFactory<Object, Object> factory = new ConcurrentKafkaListenerContainerFactory<>();
-		configurer.configure(factory, kafkaConsumerFactory);
+		configurer.configure(factory, kafkaConsumerFactory
+				.getIfAvailable(() -> new DefaultKafkaConsumerFactory<>(this.properties.buildConsumerProperties())));
 		return factory;
 	}
 

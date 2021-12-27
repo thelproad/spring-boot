@@ -1,5 +1,5 @@
 /*
- * Copyright 2012-2019 the original author or authors.
+ * Copyright 2012-2021 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,6 +15,9 @@
  */
 
 package org.springframework.boot.test.autoconfigure.jdbc;
+
+import java.util.HashMap;
+import java.util.Map;
 
 import javax.sql.DataSource;
 
@@ -38,9 +41,12 @@ import org.springframework.boot.jdbc.EmbeddedDatabaseConnection;
 import org.springframework.context.EnvironmentAware;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Role;
 import org.springframework.core.Ordered;
 import org.springframework.core.annotation.Order;
+import org.springframework.core.env.ConfigurableEnvironment;
 import org.springframework.core.env.Environment;
+import org.springframework.core.env.MapPropertySource;
 import org.springframework.jdbc.datasource.embedded.EmbeddedDatabase;
 import org.springframework.jdbc.datasource.embedded.EmbeddedDatabaseBuilder;
 import org.springframework.util.Assert;
@@ -65,14 +71,15 @@ public class TestDatabaseAutoConfiguration {
 	}
 
 	@Bean
+	@Role(BeanDefinition.ROLE_INFRASTRUCTURE)
 	@ConditionalOnProperty(prefix = "spring.test.database", name = "replace", havingValue = "ANY",
 			matchIfMissing = true)
-	public static EmbeddedDataSourceBeanFactoryPostProcessor embeddedDataSourceBeanFactoryPostProcessor() {
+	static EmbeddedDataSourceBeanFactoryPostProcessor embeddedDataSourceBeanFactoryPostProcessor() {
 		return new EmbeddedDataSourceBeanFactoryPostProcessor();
 	}
 
 	@Order(Ordered.LOWEST_PRECEDENCE)
-	private static class EmbeddedDataSourceBeanFactoryPostProcessor implements BeanDefinitionRegistryPostProcessor {
+	static class EmbeddedDataSourceBeanFactoryPostProcessor implements BeanDefinitionRegistryPostProcessor {
 
 		private static final Log logger = LogFactory.getLog(EmbeddedDataSourceBeanFactoryPostProcessor.class);
 
@@ -128,8 +135,7 @@ public class TestDatabaseAutoConfiguration {
 
 	}
 
-	private static class EmbeddedDataSourceFactoryBean
-			implements FactoryBean<DataSource>, EnvironmentAware, InitializingBean {
+	static class EmbeddedDataSourceFactoryBean implements FactoryBean<DataSource>, EnvironmentAware, InitializingBean {
 
 		private EmbeddedDataSourceFactory factory;
 
@@ -162,12 +168,19 @@ public class TestDatabaseAutoConfiguration {
 
 	}
 
-	private static class EmbeddedDataSourceFactory {
+	static class EmbeddedDataSourceFactory {
 
 		private final Environment environment;
 
 		EmbeddedDataSourceFactory(Environment environment) {
 			this.environment = environment;
+			if (environment instanceof ConfigurableEnvironment) {
+				Map<String, Object> source = new HashMap<>();
+				source.put("spring.datasource.schema-username", "");
+				source.put("spring.sql.init.username", "");
+				((ConfigurableEnvironment) environment).getPropertySources()
+						.addFirst(new MapPropertySource("testDatabase", source));
+			}
 		}
 
 		EmbeddedDatabase getEmbeddedDatabase() {

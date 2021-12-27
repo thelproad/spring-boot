@@ -1,5 +1,5 @@
 /*
- * Copyright 2012-2019 the original author or authors.
+ * Copyright 2012-2021 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,7 +16,7 @@
 
 package org.springframework.boot.autoconfigure.validation;
 
-import javax.validation.ValidationException;
+import jakarta.validation.ValidationException;
 
 import org.springframework.beans.BeansException;
 import org.springframework.beans.factory.DisposableBean;
@@ -25,6 +25,7 @@ import org.springframework.beans.factory.NoSuchBeanDefinitionException;
 import org.springframework.boot.validation.MessageInterpolatorFactory;
 import org.springframework.context.ApplicationContext;
 import org.springframework.context.ApplicationContextAware;
+import org.springframework.context.MessageSource;
 import org.springframework.validation.Errors;
 import org.springframework.validation.SmartValidator;
 import org.springframework.validation.Validator;
@@ -96,7 +97,7 @@ public class ValidatorAdapter implements SmartValidator, ApplicationContextAware
 	 * wrapping it if necessary.
 	 * <p>
 	 * If the specified {@link Validator} is not {@code null}, it is wrapped. If not, a
-	 * {@link javax.validation.Validator} is retrieved from the context and wrapped.
+	 * {@link jakarta.validation.Validator} is retrieved from the context and wrapped.
 	 * Otherwise, a new default validator is created.
 	 * @param applicationContext the application context
 	 * @param validator an existing validator to use or {@code null}
@@ -114,12 +115,12 @@ public class ValidatorAdapter implements SmartValidator, ApplicationContextAware
 		if (existing != null) {
 			return wrap(existing, true);
 		}
-		return create();
+		return create(applicationContext);
 	}
 
 	private static Validator getExisting(ApplicationContext applicationContext) {
 		try {
-			javax.validation.Validator validator = applicationContext.getBean(javax.validation.Validator.class);
+			jakarta.validation.Validator validator = applicationContext.getBean(jakarta.validation.Validator.class);
 			if (validator instanceof Validator) {
 				return (Validator) validator;
 			}
@@ -130,10 +131,10 @@ public class ValidatorAdapter implements SmartValidator, ApplicationContextAware
 		}
 	}
 
-	private static Validator create() {
+	private static Validator create(MessageSource messageSource) {
 		OptionalValidatorFactoryBean validator = new OptionalValidatorFactoryBean();
 		try {
-			MessageInterpolatorFactory factory = new MessageInterpolatorFactory();
+			MessageInterpolatorFactory factory = new MessageInterpolatorFactory(messageSource);
 			validator.setMessageInterpolator(factory.getObject());
 		}
 		catch (ValidationException ex) {
@@ -143,11 +144,11 @@ public class ValidatorAdapter implements SmartValidator, ApplicationContextAware
 	}
 
 	private static Validator wrap(Validator validator, boolean existingBean) {
-		if (validator instanceof javax.validation.Validator) {
+		if (validator instanceof jakarta.validation.Validator) {
 			if (validator instanceof SpringValidatorAdapter) {
 				return new ValidatorAdapter((SpringValidatorAdapter) validator, existingBean);
 			}
-			return new ValidatorAdapter(new SpringValidatorAdapter((javax.validation.Validator) validator),
+			return new ValidatorAdapter(new SpringValidatorAdapter((jakarta.validation.Validator) validator),
 					existingBean);
 		}
 		return validator;

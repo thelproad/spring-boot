@@ -1,5 +1,5 @@
 /*
- * Copyright 2012-2019 the original author or authors.
+ * Copyright 2012-2021 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -37,12 +37,11 @@ import org.apache.maven.plugins.annotations.Mojo;
 import org.apache.maven.plugins.annotations.Parameter;
 import org.apache.maven.plugins.annotations.ResolutionScope;
 
-import org.springframework.boot.loader.tools.JavaExecutable;
 import org.springframework.boot.loader.tools.RunProcess;
 
 /**
  * Start a spring application. Contrary to the {@code run} goal, this does not block and
- * allows other goal to operate on the application. This goal is typically used in
+ * allows other goals to operate on the application. This goal is typically used in
  * integration test scenario where the application is started before a test suite and
  * stopped after.
  *
@@ -62,29 +61,29 @@ public class StartMojo extends AbstractRunMojo {
 	 * The JMX name of the automatically deployed MBean managing the lifecycle of the
 	 * spring application.
 	 */
-	@Parameter
-	private String jmxName = SpringApplicationAdminClient.DEFAULT_OBJECT_NAME;
+	@Parameter(defaultValue = SpringApplicationAdminClient.DEFAULT_OBJECT_NAME)
+	private String jmxName;
 
 	/**
 	 * The port to use to expose the platform MBeanServer if the application is forked.
 	 */
-	@Parameter
-	private int jmxPort = 9001;
+	@Parameter(defaultValue = "9001")
+	private int jmxPort;
 
 	/**
 	 * The number of milli-seconds to wait between each attempt to check if the spring
 	 * application is ready.
 	 */
-	@Parameter
-	private long wait = 500;
+	@Parameter(property = "spring-boot.start.wait", defaultValue = "500")
+	private long wait;
 
 	/**
 	 * The maximum number of attempts to check if the spring application is ready.
 	 * Combined with the "wait" argument, this gives a global timeout value (30 sec by
 	 * default)
 	 */
-	@Parameter
-	private int maxAttempts = 60;
+	@Parameter(property = "spring-boot.start.maxAttempts", defaultValue = "60")
+	private int maxAttempts;
 
 	private final Object lock = new Object();
 
@@ -104,7 +103,7 @@ public class StartMojo extends AbstractRunMojo {
 	private RunProcess runProcess(File workingDirectory, List<String> args, Map<String, String> environmentVariables)
 			throws MojoExecutionException {
 		try {
-			RunProcess runProcess = new RunProcess(workingDirectory, new JavaExecutable().toString());
+			RunProcess runProcess = new RunProcess(workingDirectory, getJavaExecutable());
 			runProcess.run(false, args, environmentVariables);
 			return runProcess;
 		}
